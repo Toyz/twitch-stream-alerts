@@ -70,9 +70,6 @@ namespace Website.API
 
                     switch(payloadData)
                     {
-                        case Models.Channel.Subscribe sub:
-                            _logger.LogInformation(sub.ToString());
-                            break;
                     }
 
                     return Ok(payload.Subscription.Id);
