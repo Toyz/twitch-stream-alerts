@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -17,13 +18,18 @@ namespace Website.API
     public class TwitchController : ControllerBase
     {
         private readonly ILogger<TwitchController> _logger;
+        private readonly IConfiguration _configuration;
+        private readonly string TwitchSignatureKey;
 
-        public TwitchController(ILogger<TwitchController> logger)
+        public TwitchController(ILogger<TwitchController> logger, IConfiguration configuration)
         {
             _logger = logger;
+            _configuration = configuration;
+
+            TwitchSignatureKey = _configuration.GetValue("twitch:signature_key", "");
         }
 
-        [HttpPost]
+        [HttpPost("notify")]
         public async Task<IActionResult> Notify()
         {
             (string sig, string id, string ts) Headers;
@@ -58,8 +64,16 @@ namespace Website.API
 
                     return BadRequest();
                 case "notification":
-                    var payload = JsonSerializer.Deserialize<Models.TwitchEvent.Root>(body);
+                    var payload = JsonSerializer.Deserialize<Models.TwitchEvent>(body);
                     _logger.LogInformation(body);
+                    var payloadData = payload.EventObject;
+
+                    switch(payloadData)
+                    {
+                        case Models.Channel.Subscribe sub:
+                            _logger.LogInformation(sub.ToString());
+                            break;
+                    }
 
                     return Ok(payload.Subscription.Id);
 
@@ -68,7 +82,7 @@ namespace Website.API
             }
         }
 
-        private static bool ValidateHeaders(IHeaderDictionary headers, out (string sig, string id, string ts) headers2)
+        private bool ValidateHeaders(IHeaderDictionary headers, out (string sig, string id, string ts) headers2)
         {
             headers2 = ("", "", "");
 
@@ -80,17 +94,17 @@ namespace Website.API
             return true;
         }
 
-        private static bool VerifyHash(string sig, string id, string ts, string body)
+        private bool VerifyHash(string sig, string id, string ts, string body)
         {
             var payload = id + ts + body;
-            var data = HashHMAC(Encoding.UTF8.GetBytes("my-key"), Encoding.UTF8.GetBytes(payload));
+            var data = HashHMAC(Encoding.UTF8.GetBytes(TwitchSignatureKey), Encoding.UTF8.GetBytes(payload));
 
             var localHash = BitConverter.ToString(data).Replace("-", "");
 
             return localHash == sig.ToUpper();
         }
 
-        private static byte[] HashHMAC(byte[] key, byte[] message)
+        private byte[] HashHMAC(byte[] key, byte[] message)
         {
             var hash = new HMACSHA256(key);
             return hash.ComputeHash(message);
