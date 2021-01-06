@@ -29,6 +29,21 @@ namespace Website.API
             TwitchSignatureKey = _configuration.GetValue("twitch:signature_key", "");
         }
 
+        [HttpGet]
+        public IActionResult Get()
+        {
+            var scheme = Request.Scheme;
+            if(!Request.Host.Host.Contains("localhost"))
+            {
+                scheme = "https";
+            }
+
+            return Ok(new
+            {
+                url = Url.Action("Notify", "Twitch", new { }, scheme),
+            });
+        }
+
         [HttpPost("notify")]
         public async Task<IActionResult> Notify()
         {
