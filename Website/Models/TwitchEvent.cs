@@ -53,9 +53,8 @@ namespace Website.Models
 
         public BaseEvent EventObject => Subscription.Type switch
         {
-            "channel.subscribe" or "channels.subscribe" => new Channel.Subscribe(Event.RootElement),
-            "channel.follow" or "channels.follow" => new Channel.Follow(Event.RootElement),
-            "channel.update" or "channels.update"  => new Channel.Update(Event.RootElement),
+            "stream.online" => new Stream.Online(Event.RootElement),
+            "stream.offline" => new Stream.Offline(Event.RootElement),
             _ => throw new Exception($"{Subscription.Type} is an unknown event type")
         };
     }

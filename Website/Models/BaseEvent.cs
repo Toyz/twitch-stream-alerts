@@ -37,16 +37,12 @@ namespace Website.Models
             }
         }
         
-        [JsonPropertyName("user_id")]
         public string UserId { get; set; }
 
-        [JsonPropertyName("user_name")]
         public string UserName { get; set; }
 
-        [JsonPropertyName("broadcaster_user_id")]
         public string BroadcasterUserId { get; set; }
 
-        [JsonPropertyName("broadcaster_user_name")]
         public string BroadcasterUserName { get; set; }
 
         public override string ToString()

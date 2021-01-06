@@ -4,11 +4,11 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-namespace Website.Models.Channel
+namespace Website.Models.Stream
 {
-    public class Follow : BaseEvent
+    public class Offline : BaseEvent
     {
-        public Follow(JsonElement rootElement) : base(rootElement)
+        public Offline(JsonElement rootElement) : base(rootElement)
         {
         }
     }
