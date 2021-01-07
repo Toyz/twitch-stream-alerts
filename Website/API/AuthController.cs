@@ -43,7 +43,7 @@ namespace Website.API
 
             await HttpContext.ChallengeAsync(TwitchAuthenticationDefaults.AuthenticationScheme, new AuthenticationProperties()
             {
-                RedirectUri = Url.Action("ExternalAuthLogin", "Login", new { returnUrl }, scheme)
+                RedirectUri = new PathString("/Auth/ExternalAuthLogin").Add(QueryString.Create("returnUrl", returnUrl)),
             });
         }
 

@@ -117,6 +117,7 @@ namespace Website
             app.UseRouting();
 
             app.UseAuthorization();
+            app.UseAuthentication();
             app.UseMvcWithDefaultRoute();
 
             app.UseEndpoints(endpoints =>

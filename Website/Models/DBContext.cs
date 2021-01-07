@@ -11,7 +11,10 @@ namespace Website.Models
 {
     public class DBContext : IdentityDbContext<User>
     {
+        public DbSet<Notification> Notifications { get; set; }
+
         private readonly ILoggerFactory _loggerFactory;
+
         public DBContext() { }
 
         public DBContext(DbContextOptions<DBContext> options, ILoggerFactory loggerFactory) : base(options)
@@ -39,6 +42,7 @@ namespace Website.Models
             builder.UseIdentityColumns();
             builder.HasPostgresExtension("pg_trgm");
 
+            builder.Entity<Notification>().Property(x => x.Created).HasDefaultValueSql("CURRENT_TIMESTAMP");
         }
     }
 }
