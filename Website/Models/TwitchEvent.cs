@@ -20,6 +20,9 @@ namespace Website.Models
 
         [JsonPropertyName("callback")]
         public string Callback { get; set; }
+
+        [JsonPropertyName("secret")]
+        public string Secret { get; set; }
     }
 
     public class Subscription
@@ -50,6 +53,9 @@ namespace Website.Models
 
         [JsonPropertyName("event")]
         public JsonDocument Event { get; set; }
+
+        [JsonPropertyName("challenge")]
+        public string Challenge { get; set; }
 
         public BaseEvent EventObject => Subscription.Type switch
         {

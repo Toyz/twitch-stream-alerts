@@ -4,7 +4,11 @@
     ViewData["Title"] = "Home page";
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://docs.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
-</div>
+@if (User.Identity.IsAuthenticated)
+{
+    <h5>Hello world</h5>
+}
+else
+{
+    <a class="btn btn-info" asp-action="Login" asp-controller="Auth">Login with twitch</a>
+}

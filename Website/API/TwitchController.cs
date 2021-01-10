@@ -1,15 +1,19 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Website.Models;
 
 namespace Website.API
 {
@@ -20,13 +24,17 @@ namespace Website.API
         private readonly ILogger<TwitchController> _logger;
         private readonly IConfiguration _configuration;
         private readonly string TwitchSignatureKey;
+        private readonly string NotificationURL;
+        private readonly Repos.IStreamerRepo _streamerRepo;
 
-        public TwitchController(ILogger<TwitchController> logger, IConfiguration configuration)
+        public TwitchController(ILogger<TwitchController> logger, IConfiguration configuration, Repos.IStreamerRepo streamerRepo)
         {
             _logger = logger;
             _configuration = configuration;
 
-            TwitchSignatureKey = _configuration.GetValue("twitch:signature_key", "");
+            TwitchSignatureKey = _configuration.GetValue("twitch:signature_key", string.Empty);
+            NotificationURL = _configuration.GetValue("notify_host", string.Empty);
+            _streamerRepo = streamerRepo;
         }
 
         [HttpGet]
@@ -37,23 +45,134 @@ namespace Website.API
             {
                 scheme = "https";
             }
+            var pageUrl = Url.Action("Notify", "Twitch", new { }, scheme);
+
+            if (!string.IsNullOrEmpty(NotificationURL))
+            {
+                pageUrl = $"{NotificationURL.TrimEnd('/')}/api/twitch/notify";
+            }
 
             return Ok(new
             {
-                url = Url.Action("Notify", "Twitch", new { }, scheme),
+                url = pageUrl
             });
         }
+
+#if DEBUG
+        [HttpGet("list")]
+        [Authorize]
+        public async Task<IActionResult> List()
+        {
+            var clientId = _configuration.GetValue("twitch:ClientID", "");
+            var clientSec = _configuration.GetValue("twitch:ClientSecret", "");
+            var client = "";
+            using (var wc = new WebClient())
+            {
+                var data = await wc.UploadStringTaskAsync($"https://id.twitch.tv/oauth2/token?client_id={clientId}&client_secret={clientSec}&grant_type=client_credentials", "POST", string.Empty);
+
+                _logger.LogInformation(data);
+                var json = JsonSerializer.Deserialize<JsonDocument>(data);
+
+                client = json.RootElement.GetProperty("access_token").GetString();
+            }
+
+            using (var wc = new HttpClient())
+            {
+                wc.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", client);
+                wc.DefaultRequestHeaders.Add("Client-ID", clientId);
+
+                var data = await wc.GetAsync("https://api.twitch.tv/helix/eventsub/subscriptions");
+
+                return Ok(await data.Content.ReadAsStringAsync());
+            }
+        }
+#endif
+
+        /*
+        [HttpPost("register")]
+        [Authorize]
+        public async Task<IActionResult> Register([FromBody])
+        {
+            if (string.IsNullOrEmpty(boardcasterid)) return BadRequest();
+
+            var clientId = _configuration.GetValue("twitch:ClientID", "");
+            var clientSec = _configuration.GetValue("twitch:ClientSecret", "");
+            var client = "";
+            using(var wc = new WebClient())
+            {
+                var data = await wc.UploadStringTaskAsync($"https://id.twitch.tv/oauth2/token?client_id={clientId}&client_secret={clientSec}&grant_type=client_credentials", "POST", string.Empty);
+
+                _logger.LogInformation(data);
+                var json = JsonSerializer.Deserialize<JsonDocument>(data);
+
+                client = json.RootElement.GetProperty("access_token").GetString();       
+            }
+
+            var scheme = Request.Scheme;
+            if (!Request.Host.Host.Contains("localhost"))
+            {
+                scheme = "https";
+            }
+            var pageUrl = Url.Action("Notify", "Twitch", new { }, scheme);
+
+            if (!string.IsNullOrEmpty(NotificationURL))
+            {
+                pageUrl = $"{NotificationURL.TrimEnd('/')}/api/twitch/notify";
+            }
+
+            using (var wc = new HttpClient())
+            {
+                wc.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", client);
+                wc.DefaultRequestHeaders.Add("Client-ID", clientId);
+
+                var subEvent = new TwitchSubscribe();
+                subEvent.Type = "stream.online";
+                subEvent.Version = "1";
+                subEvent.Condition = new Condition()
+                {
+                    BroadcasterUserId = boardcasterid
+                };
+                subEvent.Transport = new Transport()
+                {
+                    Method = "webhook",
+                    Callback = pageUrl,
+                    Secret = _configuration.GetValue("twitch:signature_key", "")
+                };
+
+                try
+                {
+                    var content = new StringContent(subEvent.ToString(), Encoding.UTF8, "application/json");
+
+                    var data = await wc.PostAsync("https://api.twitch.tv/helix/eventsub/subscriptions", content);
+                    var body = await data.Content.ReadAsStringAsync();
+
+                    return Ok(body);
+                }catch(WebException ex)
+                {
+                    using (Stream stream = ex.Response.GetResponseStream())
+                    {
+                        StreamReader reader = new StreamReader(stream, Encoding.UTF8);
+                        _logger.LogError(reader.ReadToEnd());
+                    }
+                } 
+            }
+
+            return BadRequest();
+        }
+        */
 
         [HttpPost("notify")]
         public async Task<IActionResult> Notify()
         {
+            string body = await new StreamReader(Request.Body).ReadToEndAsync();
+            _logger.LogInformation(body);
+
             (string sig, string id, string ts) Headers;
             if(!ValidateHeaders(HttpContext.Request.Headers, out Headers))
             {
                 return BadRequest();
             }
 
-            string body = await new StreamReader(Request.Body).ReadToEndAsync();
             if (!VerifyHash(Headers.sig, Headers.id, Headers.ts, body))
             {
                 return BadRequest();
@@ -64,23 +183,26 @@ namespace Website.API
                 return BadRequest();
             }
 
-            switch(payloadType)
+            var payload = JsonSerializer.Deserialize<TwitchEvent>(body);
+
+            switch (payloadType)
             {
                 case "webhook_callback_verification":
-                    var doc = JsonSerializer.Deserialize<JsonDocument>(body);
-                    if(doc.RootElement.TryGetProperty("code", out var code))
+                    if(!string.IsNullOrEmpty(payload.Challenge))
                     {
-                        var strCode = code.GetString();
-                        _logger.LogInformation(strCode);
+                        _logger.LogInformation(payload.Challenge);
 
                         HttpContext.Response.ContentType = "text/plain";
-                        return Content(strCode);
+
+                        var streamer = await _streamerRepo.GetById(payload.Subscription.Condition.BroadcasterUserId);
+                        streamer.Verified = true;
+                        await _streamerRepo.Update(streamer);
+
+                        return Content(payload.Challenge);
                     }
 
                     return BadRequest();
                 case "notification":
-                    var payload = JsonSerializer.Deserialize<Models.TwitchEvent>(body);
-                    _logger.LogInformation(body);
                     var payloadData = payload.EventObject;
 
                     switch(payloadData)
@@ -113,7 +235,7 @@ namespace Website.API
 
             var localHash = BitConverter.ToString(data).Replace("-", "");
 
-            return localHash == sig.ToUpper();
+            return localHash.Equals(sig, StringComparison.OrdinalIgnoreCase);
         }
 
         private byte[] HashHMAC(byte[] key, byte[] message)

@@ -57,10 +57,11 @@ namespace Website
                 options.DefaultChallengeScheme = CookieAuthenticationDefaults.AuthenticationScheme;
             }).AddCookie(options =>
             {
-                options.Cookie.Name = "NP.Auth";
+                options.Cookie.Name = "Sess";
                 options.Cookie.IsEssential = true;
                 options.LoginPath = "/Auth/Login";
                 options.LogoutPath = "/Auth/Logout";
+                options.AccessDeniedPath = "/"; // We don't really care
             })
            .AddTwitch(options =>
            {
@@ -96,6 +97,7 @@ namespace Website
                };
            });
 
+            services.AddScoped<Repos.IStreamerRepo, Repos.StreamerRepo>();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -116,8 +118,8 @@ namespace Website
 
             app.UseRouting();
 
-            app.UseAuthorization();
             app.UseAuthentication();
+            app.UseAuthorization();
             app.UseMvcWithDefaultRoute();
 
             app.UseEndpoints(endpoints =>

@@ -1,17 +1,14 @@
 ﻿using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace Website.Models
 {
     public class DBContext : IdentityDbContext<User>
     {
-        public DbSet<Notification> Notifications { get; set; }
+        public DbSet<Streamer> Streamers { get; set; }
+        public DbSet<Alert> Alerts { get; set; }
 
         private readonly ILoggerFactory _loggerFactory;
 
@@ -42,7 +39,8 @@ namespace Website.Models
             builder.UseIdentityColumns();
             builder.HasPostgresExtension("pg_trgm");
 
-            builder.Entity<Notification>().Property(x => x.Created).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            builder.Entity<Streamer>().Property(x => x.Created).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            builder.Entity<Alert>().Property(x => x.Created).HasDefaultValueSql("CURRENT_TIMESTAMP");
         }
     }
 }
